@@ -1,0 +1,13 @@
+import { useRef, useState } from "react";
+type Props={onCreate:(data:FormData)=>Promise<void>};
+export function JobForm({onCreate}:Props){const [files,setFiles]=useState<File[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),input=useRef<HTMLInputElement>(null);async function submit(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setError("");setBusy(true);try{const data=new FormData(event.currentTarget);files.forEach(file=>data.append("files",file));await onCreate(data)}catch(cause){setError(cause instanceof Error?cause.message:"创建任务失败")}finally{setBusy(false)}}return <form className="card" onSubmit={submit}>
+  <Step number="01" title="选择资料" copy="单个文件最大 10 MB，可同时上传多个"/>
+  <label className="dropzone"><input ref={input} type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" onChange={e=>setFiles([...e.target.files??[]])}/><span className="upload-icon">↑</span><strong>拖放文件到这里</strong><small>或点击浏览本地文件</small></label>
+  <ul className="file-list" aria-live="polite">{files.map(file=><li key={`${file.name}-${file.size}`}>{file.name}<span>{(file.size/1048576).toFixed(1)} MB</span></li>)}</ul>
+  <Step number="02" title="定制节目" copy="为这期节目设置声音方向"/>
+  <label>播客标题<input name="title" maxLength={120} placeholder="例如：重新理解人工智能" required/></label>
+  <div className="fields"><label>目标语言<select name="language"><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label><label>目标时长<select name="duration" defaultValue="8"><option value="5">约 5 分钟</option><option value="8">约 8 分钟</option><option value="15">约 15 分钟</option><option value="30">约 30 分钟</option></select></label></div>
+  <label>节目风格<select name="style"><option>轻松科普</option><option>深度访谈</option><option>新闻解读</option><option>故事叙述</option></select></label>
+  <button id="submit" disabled={busy||files.length===0}>开始生成播客 <span>→</span></button><p className="error" role="alert">{error}</p>
+ </form>}
+function Step({number,title,copy}:{number:string;title:string;copy:string}){return <div className="step"><b>{number}</b><div><h2>{title}</h2><p>{copy}</p></div></div>}
