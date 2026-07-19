@@ -1,4 +1,4 @@
-import { errorResponse, json, assertSameOrigin } from "./http";
+import { errorResponse, json, assertSameOrigin, withCors } from "./http";
 import { consume } from "./jobs";
 import type { Env, JobMessage, JobRow } from "./types";
 
@@ -6,7 +6,7 @@ const allowed = new Set(["application/pdf", "text/plain", "text/markdown", "text
 const cleanName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100);
 
 async function createJob(request: Request, env: Env): Promise<Response> {
-  if (!assertSameOrigin(request)) return errorResponse("Invalid request origin", 403);
+  if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
   const form = await request.formData();
   const files = form.getAll("files").filter((value): value is File => value instanceof File);
   const title = String(form.get("title") ?? "").trim().slice(0, 120);
@@ -39,7 +39,7 @@ async function getJob(id: string, env: Env): Promise<Response> {
 }
 
 async function retryJob(id: string, request: Request, env: Env): Promise<Response> {
-  if (!assertSameOrigin(request)) return errorResponse("Invalid request origin", 403);
+  if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
   const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
   if (!row) return errorResponse("任务不存在", 404);
   if (row.status !== "failed") return errorResponse("只有失败的任务可以重试", 409);
@@ -64,16 +64,18 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
-      if (request.method === "POST" && url.pathname === "/api/jobs") return await createJob(request, env);
+      if (request.method === "OPTIONS" && request.headers.get("origin") === env.WEB_ORIGIN) return new Response(null, { status: 204, headers: { "access-control-allow-origin": env.WEB_ORIGIN, "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
+      let response: Response;
       const retryMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)\/retry$/);
-      if (retryMatch && request.method === "POST") return await retryJob(retryMatch[1], request, env);
       const match = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)(\/audio)?$/);
-      if (match && request.method === "GET") return match[2] ? await audio(match[1], request, env) : await getJob(match[1], env);
-      if (url.pathname.startsWith("/api/")) return errorResponse("Not found", 404);
-      return await env.ASSETS.fetch(request);
+      if (request.method === "POST" && url.pathname === "/api/jobs") response = await createJob(request, env);
+      else if (retryMatch && request.method === "POST") response = await retryJob(retryMatch[1], request, env);
+      else if (match && request.method === "GET") response = match[2] ? await audio(match[1], request, env) : await getJob(match[1], env);
+      else response = errorResponse("Not found", 404);
+      return withCors(response, request, env.WEB_ORIGIN);
     } catch (cause) {
       console.error(JSON.stringify({ event: "request_failed", path: url.pathname, error: cause instanceof Error ? cause.message : "unknown" }));
-      return errorResponse("服务暂时不可用，请稍后重试", 500);
+      return withCors(errorResponse("服务暂时不可用，请稍后重试", 500), request, env.WEB_ORIGIN);
     }
   },
   queue: consume

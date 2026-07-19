@@ -1,5 +1,4 @@
 export interface Env {
-  ASSETS: Fetcher;
   DB: D1Database;
   FILES: R2Bucket;
   JOBS: Queue<JobMessage>;
@@ -9,6 +8,7 @@ export interface Env {
   MINIMAX_TEXT_MODEL: string;
   MINIMAX_TTS_MODEL: string;
   MAX_UPLOAD_BYTES: string;
+  WEB_ORIGIN: string;
 }
 
 export interface JobMessage { jobId: string }
