@@ -6,7 +6,7 @@ export function JobForm({onCreate}:Props){const {locale,t}=useI18n(),[files,setF
   <ul className="file-list" aria-live="polite">{files.map(file=><li key={`${file.name}-${file.size}`}>{file.name}<span>{(file.size/1048576).toFixed(1)} MB</span></li>)}</ul>
   <Step number="02" title={t.customize} copy={t.customizeCopy}/>
   <label>{t.podcastTitle}<input name="title" value={title} maxLength={120} placeholder={t.titlePlaceholder} required onChange={event=>{titleEdited.current=true;setTitle(event.target.value)}}/></label>
-  <div className="fields"><label>{t.targetLanguage}<select name="language" defaultValue={locale}><option value="zh-CN">{t.chinese}</option><option value="en-US">{t.english}</option></select></label><label>{t.targetDuration}<select name="duration" defaultValue="8">{[5,8,15,30].map(value=><option value={value} key={value}>{t.minutes(value)}</option>)}</select></label></div>
+  <div className="fields"><label>{t.targetLanguage}<select name="language" defaultValue={locale}><option value="zh-CN">{t.chinese}</option><option value="en-US">{t.english}</option></select></label><label>{t.targetDuration}<select name="duration" defaultValue="5">{[5,8,15,30].map(value=><option value={value} key={value}>{t.minutes(value)}</option>)}</select></label></div>
   <label>{t.podcastStyle}<select name="style"><option value="轻松科普">{t.casual}</option><option value="深度访谈">{t.interview}</option><option value="新闻解读">{t.news}</option><option value="故事叙述">{t.storytelling}</option></select></label>
   <button id="submit" disabled={busy||files.length===0}>{t.createPodcast} <span>→</span></button><p className="error" role="alert">{error}</p>
  </form>}
