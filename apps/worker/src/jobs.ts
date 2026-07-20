@@ -1,4 +1,6 @@
 import { extractText } from "unpdf";
+import mammoth from "mammoth";
+import { Buffer } from "node:buffer";
 import { generateScript, synthesizeLine } from "./minimax";
 import type { Env, JobMessage, JobRow } from "./types";
 
@@ -6,7 +8,7 @@ const update = (env: Env, id: string, status: string, progress: number, stage: s
   env.DB.prepare("UPDATE jobs SET status=?, progress=?, stage=?, error=?, updated_at=? WHERE id=?")
     .bind(status, progress, stage, error, new Date().toISOString(), id).run();
 
-async function sourceText(env: Env, keys: string[]): Promise<string> {
+export async function sourceText(env: Env, keys: string[]): Promise<string> {
   const chunks: string[] = [];
   for (const key of keys) {
     const object = await env.FILES.get(key);
@@ -14,6 +16,9 @@ async function sourceText(env: Env, keys: string[]): Promise<string> {
     if (key.endsWith(".pdf")) {
       const result = await extractText(new Uint8Array(await object.arrayBuffer()), { mergePages: true });
       chunks.push(result.text);
+    } else if (key.endsWith(".docx")) {
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(await object.arrayBuffer()) });
+      chunks.push(result.value.trim());
     } else chunks.push(await object.text());
   }
   return chunks.join("\n\n").slice(0, 150000);
