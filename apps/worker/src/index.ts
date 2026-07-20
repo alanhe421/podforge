@@ -17,7 +17,7 @@ async function createJob(request: Request, env: Env): Promise<Response> {
   const files = form.getAll("files").filter((value): value is File => value instanceof File);
   const title = String(form.get("title") ?? "").trim().slice(0, 120);
   const language = String(form.get("language") ?? "zh-CN");
-  const duration = Number(form.get("duration") ?? 8);
+  const duration = Number(form.get("duration") ?? 5);
   const style = String(form.get("style") ?? "轻松科普").slice(0, 40);
   if (!title || files.length === 0) return errorResponse("请填写标题并至少上传一个资料文件");
   if (!Number.isInteger(duration) || duration < 3 || duration > 30) return errorResponse("目标时长须为 3–30 分钟");
