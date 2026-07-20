@@ -9,6 +9,8 @@ export interface Env {
   MINIMAX_TTS_MODEL: string;
   MAX_UPLOAD_BYTES: string;
   WEB_ORIGIN: string;
+  TURNSTILE_SECRET: string;
+  TURNSTILE_HOSTNAMES: string;
 }
 
 export interface JobMessage { jobId: string }

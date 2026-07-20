@@ -41,7 +41,7 @@ export async function processJob(env: Env, jobId: string): Promise<void> {
       parts.push(await synthesizeLine(env, line.text, line.speaker));
       await update(env, jobId, "processing", 45 + Math.floor(((index + 1) / script.lines.length) * 45), `正在合成语音 ${index + 1}/${script.lines.length}`);
     }
-    const audioKey = `jobs/${jobId}/podcast.mp3`;
+    const audioKey = `outputs/${jobId}/podcast.mp3`;
     const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
     const audio = new Uint8Array(total);
     let offset = 0;

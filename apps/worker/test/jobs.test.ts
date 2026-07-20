@@ -42,13 +42,13 @@ describe("source text extraction", () => {
     const contents = await zip.generateAsync({ type: "arraybuffer" });
     const extractRawText = vi.spyOn(mammoth, "extractRawText");
 
-    await expect(sourceText(envWithFiles({ "jobs/1/input/source.docx": contents }), ["jobs/1/input/source.docx"]))
+    await expect(sourceText(envWithFiles({ "inputs/1/source.docx": contents }), ["inputs/1/source.docx"]))
       .resolves.toBe("来自 Word 的正文");
     expect(extractRawText).toHaveBeenCalledWith(expect.objectContaining({ arrayBuffer: contents }));
   });
 
   it("keeps text files in mixed uploads", async () => {
-    await expect(sourceText(envWithFiles({ "jobs/1/input/notes.txt": "普通文本" }), ["jobs/1/input/notes.txt"]))
+    await expect(sourceText(envWithFiles({ "inputs/1/notes.txt": "普通文本" }), ["inputs/1/notes.txt"]))
       .resolves.toBe("普通文本");
   });
 });
