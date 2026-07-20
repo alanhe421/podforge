@@ -17,7 +17,8 @@ export async function sourceText(env: Env, keys: string[]): Promise<string> {
       const result = await extractText(new Uint8Array(await object.arrayBuffer()), { mergePages: true });
       chunks.push(result.text);
     } else if (key.endsWith(".docx")) {
-      const result = await mammoth.extractRawText({ buffer: Buffer.from(await object.arrayBuffer()) });
+      const arrayBuffer = await object.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer, buffer: Buffer.from(arrayBuffer) });
       chunks.push(result.value.trim());
     } else chunks.push(await object.text());
   }

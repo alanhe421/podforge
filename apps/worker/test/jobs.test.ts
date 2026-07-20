@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import JSZip from "jszip";
+import mammoth from "mammoth";
 
 vi.mock("unpdf", () => ({ extractText: vi.fn() }));
 
@@ -39,9 +40,11 @@ describe("source text extraction", () => {
         <w:body><w:p><w:r><w:t>来自 Word 的正文</w:t></w:r></w:p></w:body>
       </w:document>`);
     const contents = await zip.generateAsync({ type: "arraybuffer" });
+    const extractRawText = vi.spyOn(mammoth, "extractRawText");
 
     await expect(sourceText(envWithFiles({ "jobs/1/input/source.docx": contents }), ["jobs/1/input/source.docx"]))
       .resolves.toBe("来自 Word 的正文");
+    expect(extractRawText).toHaveBeenCalledWith(expect.objectContaining({ arrayBuffer: contents }));
   });
 
   it("keeps text files in mixed uploads", async () => {
