@@ -54,6 +54,22 @@ async function retryJob(id: string, request: Request, env: Env): Promise<Respons
   return json({ id, status: "queued" }, 202);
 }
 
+export async function cancelJob(id: string, request: Request, env: Env): Promise<Response> {
+  if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
+  const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
+  if (!row) return errorResponse("任务不存在", 404);
+  if (row.status === "canceled") return json({ id, status: "canceled" });
+  if (row.status !== "queued" && row.status !== "processing") return errorResponse("当前任务无法取消", 409);
+  const result = await env.DB.prepare("UPDATE jobs SET status='canceled', stage='已取消', error=NULL, updated_at=? WHERE id=? AND status IN ('queued','processing')")
+    .bind(new Date().toISOString(), id).run();
+  if (result.meta.changes === 0) {
+    const current = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
+    if (current?.status === "canceled") return json({ id, status: "canceled" });
+    return errorResponse("当前任务无法取消", 409);
+  }
+  return json({ id, status: "canceled" });
+}
+
 async function audio(id: string, request: Request, env: Env): Promise<Response> {
   const row = await env.DB.prepare("SELECT audio_key FROM jobs WHERE id=? AND status='completed'").bind(id).first<{ audio_key: string }>();
   if (!row?.audio_key) return errorResponse("音频尚未生成", 404);
@@ -73,9 +89,11 @@ export default {
       if (request.method === "OPTIONS" && request.headers.get("origin") === env.WEB_ORIGIN) return new Response(null, { status: 204, headers: { "access-control-allow-origin": env.WEB_ORIGIN, "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
       let response: Response;
       const retryMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)\/retry$/);
+      const cancelMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)\/cancel$/);
       const match = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)(\/audio)?$/);
       if (request.method === "POST" && url.pathname === "/api/jobs") response = await createJob(request, env);
       else if (retryMatch && request.method === "POST") response = await retryJob(retryMatch[1], request, env);
+      else if (cancelMatch && request.method === "POST") response = await cancelJob(cancelMatch[1], request, env);
       else if (match && request.method === "GET") response = match[2] ? await audio(match[1], request, env) : await getJob(match[1], env);
       else response = errorResponse("Not found", 404);
       return withCors(response, request, env.WEB_ORIGIN);
