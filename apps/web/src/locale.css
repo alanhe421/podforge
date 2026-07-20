@@ -1,0 +1,1 @@
+.header-actions{display:flex;align-items:center;gap:16px}.locale-switch{display:flex;padding:3px;background:#e5e1d7;border-radius:9px}.locale-switch button{min-width:34px;padding:6px 8px;border-radius:7px;background:transparent;color:var(--muted);font-size:11px}.locale-switch button[aria-pressed="true"]{background:var(--cream);color:var(--ink);box-shadow:0 1px 4px #1520191a}
