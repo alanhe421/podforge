@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-19",
   "compatibility_flags": ["nodejs_compat"],
-  "d1_databases": [{ "binding": "DB", "database_name": "podforge", "database_id": "REPLACE_WITH_D1_ID", "migrations_dir": "migrations" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "podforge", "database_id": "835cd269-455f-4972-a959-350682a9fbf2", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "FILES", "bucket_name": "podforge-files", "preview_bucket_name": "podforge-files-preview" }],
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "podforge-jobs" }],
