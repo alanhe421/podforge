@@ -53,6 +53,8 @@ npx wrangler secret put MINIMAX_API_KEY
 npx wrangler secret put MINIMAX_GROUP_ID
 ```
 
+Turnstile site key 配置为 GitHub Actions secret `TURNSTILE_SITE_KEY`，服务端 secret 配置为 Worker Secret `TURNSTILE_SECRET`。WAF 限速和 R2 原始资料生命周期的生产配置见 [生产环境安全配置](docs/production-security.md)。
+
 也可以手动执行同一套生产部署步骤：
 
 ```bash
@@ -74,4 +76,4 @@ npm test
 npm run build
 ```
 
-生产环境建议增加 Cloudflare Turnstile/WAF 限速规则，并为 R2 原始资料配置生命周期删除策略。正式发布前需使用实际 MiniMax 账号确认两个系统音色可用。
+生产发布前需按 [生产环境安全配置](docs/production-security.md) 完成 Cloudflare 账号侧配置，并使用实际 MiniMax 账号确认两个系统音色可用。

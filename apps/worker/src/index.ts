@@ -1,6 +1,7 @@
 import { errorResponse, json, assertSameOrigin, withCors } from "./http";
 import { consume } from "./jobs";
 import type { Env, JobMessage, JobRow } from "./types";
+import { verifyTurnstile } from "./turnstile";
 
 const allowed = new Set([
   "application/pdf",
@@ -14,6 +15,7 @@ const cleanName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(
 async function createJob(request: Request, env: Env): Promise<Response> {
   if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
   const form = await request.formData();
+  if (!await verifyTurnstile(request, env, form.get("cf-turnstile-response"))) return errorResponse("人机验证失败，请重试", 403);
   const files = form.getAll("files").filter((value): value is File => value instanceof File);
   const title = String(form.get("title") ?? "").trim().slice(0, 120);
   const language = String(form.get("language") ?? "zh-CN");
@@ -26,7 +28,7 @@ async function createJob(request: Request, env: Env): Promise<Response> {
   const id = crypto.randomUUID();
   const keys: string[] = [];
   for (const file of files) {
-    const key = `jobs/${id}/input/${crypto.randomUUID()}-${cleanName(file.name).toLowerCase()}`;
+    const key = `inputs/${id}/${crypto.randomUUID()}-${cleanName(file.name).toLowerCase()}`;
     await env.FILES.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
     keys.push(key);
   }
@@ -46,6 +48,8 @@ async function getJob(id: string, env: Env): Promise<Response> {
 
 async function retryJob(id: string, request: Request, env: Env): Promise<Response> {
   if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
+  const form = await request.formData();
+  if (!await verifyTurnstile(request, env, form.get("cf-turnstile-response"))) return errorResponse("人机验证失败，请重试", 403);
   const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
   if (!row) return errorResponse("任务不存在", 404);
   if (row.status !== "failed") return errorResponse("只有失败的任务可以重试", 409);
