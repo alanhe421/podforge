@@ -9,7 +9,7 @@ function cancelEnv(status: string, changes = 1): Env {
     DB: {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn(() => ({
-          first: vi.fn(async () => ({ status })),
+          first: vi.fn(async () => sql.includes("FROM sessions") ? ({ id: "user-1", email: "user@example.com", name: "User", picture: null }) : ({ status })),
           run: vi.fn(async () => ({ meta: { changes } }))
         }))
       }))
@@ -41,10 +41,15 @@ describe("HTTP helpers", () => {
     expect(response.headers.get("content-type")).toContain("application/json");
   });
 
+  it("requires authentication before canceling a job", async () => {
+    const response = await cancelJob("11111111-1111-1111-1111-111111111111", new Request("https://api.example/api/jobs/11111111-1111-1111-1111-111111111111/cancel", { method: "POST", headers: { origin: "https://web.example" } }), cancelEnv("processing"));
+    expect(response.status).toBe(401);
+  });
+
   it("cancels a processing job", async () => {
     const env = cancelEnv("processing");
     const response = await cancelJob("11111111-1111-1111-1111-111111111111", new Request("https://api.example/api/jobs/11111111-1111-1111-1111-111111111111/cancel", {
-      method: "POST", headers: { origin: "https://web.example" }
+      method: "POST", headers: { origin: "https://web.example", cookie: "podforge_session=test-session" }
     }), env);
 
     expect(response.status).toBe(200);
@@ -54,7 +59,7 @@ describe("HTTP helpers", () => {
 
   it("does not cancel a completed job", async () => {
     const response = await cancelJob("11111111-1111-1111-1111-111111111111", new Request("https://api.example/api/jobs/11111111-1111-1111-1111-111111111111/cancel", {
-      method: "POST", headers: { origin: "https://web.example" }
+      method: "POST", headers: { origin: "https://web.example", cookie: "podforge_session=test-session" }
     }), cancelEnv("completed"));
 
     expect(response.status).toBe(409);

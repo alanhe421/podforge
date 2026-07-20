@@ -15,6 +15,7 @@ export function withCors(response: Response, request: Request, allowedOrigin: st
   if (request.headers.get("origin") !== allowedOrigin) return response;
   const result = new Response(response.body, response);
   result.headers.set("access-control-allow-origin", allowedOrigin);
+  result.headers.set("access-control-allow-credentials", "true");
   result.headers.set("vary", "Origin");
   return result;
 }

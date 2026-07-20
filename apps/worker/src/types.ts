@@ -9,7 +9,10 @@ export interface Env {
   MINIMAX_TTS_MODEL: string;
   MAX_UPLOAD_BYTES: string;
   WEB_ORIGIN: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
 }
+export interface User { id: string; email: string; name: string; picture: string | null }
 
 export interface JobMessage { jobId: string }
 export interface JobRow {
@@ -17,6 +20,7 @@ export interface JobRow {
   status: string; progress: number; stage: string; error: string | null;
   script: string | null; audio_key: string | null; input_keys: string;
   created_at: string; updated_at: string;
+  user_id: string;
 }
 export type PodcastTone = "calm" | "happy" | "surprised" | "sad" | "angry" | "fearful";
 export interface DialogueLine { speaker: "host" | "guest"; text: string; tone?: PodcastTone }
