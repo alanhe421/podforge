@@ -3,8 +3,10 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 
 vi.mock("unpdf", () => ({ extractText: vi.fn() }));
+vi.mock("../src/minimax", () => ({ generateScript: vi.fn(), synthesizeLine: vi.fn() }));
 
-import { sourceText } from "../src/jobs";
+import { generateScript, synthesizeLine } from "../src/minimax";
+import { processJob, sourceText } from "../src/jobs";
 import type { Env } from "../src/types";
 
 function envWithFiles(files: Record<string, string | ArrayBuffer>): Env {
@@ -50,5 +52,55 @@ describe("source text extraction", () => {
   it("keeps text files in mixed uploads", async () => {
     await expect(sourceText(envWithFiles({ "jobs/1/input/notes.txt": "普通文本" }), ["jobs/1/input/notes.txt"]))
       .resolves.toBe("普通文本");
+  });
+});
+
+describe("job cancellation", () => {
+  it("acknowledges an already canceled queued job without doing work", async () => {
+    const env = {
+      DB: { prepare: vi.fn(() => ({ bind: () => ({ first: async () => ({ status: "canceled" }) }) })) },
+      FILES: { get: vi.fn(), put: vi.fn(), delete: vi.fn() }
+    } as unknown as Env;
+
+    await expect(processJob(env, "job-1")).resolves.toBeUndefined();
+    expect(env.FILES.get).not.toHaveBeenCalled();
+    expect(generateScript).not.toHaveBeenCalled();
+  });
+
+  it("stops before writing audio when canceled during an in-flight TTS request", async () => {
+    let status = "queued";
+    const job = {
+      id: "job-2", title: "测试", language: "zh-CN", duration: 3, style: "轻松科普",
+      status, progress: 5, stage: "等待处理", error: null, script: null, audio_key: null,
+      input_keys: JSON.stringify(["jobs/job-2/input/source.txt"]), created_at: "", updated_at: ""
+    };
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn(() => ({
+        first: vi.fn(async () => sql.startsWith("SELECT *") ? { ...job, status } : { status }),
+        run: vi.fn(async () => {
+          if (sql.includes("SET status='processing'")) status = "processing";
+          return { meta: { changes: 1 } };
+        })
+      }))
+    }));
+    const put = vi.fn();
+    const env = {
+      DB: { prepare },
+      FILES: {
+        get: vi.fn(async () => ({ text: async () => "一段测试资料" })),
+        put,
+        delete: vi.fn(async () => undefined)
+      }
+    } as unknown as Env;
+    vi.mocked(generateScript).mockResolvedValue({ title: "测试", lines: [{ speaker: "host", text: "你好" }] });
+    vi.mocked(synthesizeLine).mockImplementation(async () => {
+      status = "canceled";
+      return new Uint8Array([0, 0]);
+    });
+
+    await expect(processJob(env, "job-2")).resolves.toBeUndefined();
+    expect(synthesizeLine).toHaveBeenCalledOnce();
+    expect(put).not.toHaveBeenCalled();
+    expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining("status='failed'"));
   });
 });

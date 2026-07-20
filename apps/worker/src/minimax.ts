@@ -60,10 +60,13 @@ async function minimaxFetch(env: Env, path: string, init: RequestInit): Promise<
 }
 
 export async function generateScript(env: Env, source: string, title: string, language: string, duration: number, style: string): Promise<PodcastScript> {
+  const lengthGuide = language.startsWith("zh")
+    ? `总对话控制在约 ${duration * 320} 个中文字符（允许上下浮动 15%）`
+    : `Keep the total dialogue near ${duration * 145} spoken words (within 15%)`;
   const response = await minimaxFetch(env, "/chat/completions", { method: "POST", body: JSON.stringify({
     model: env.MINIMAX_TEXT_MODEL,
     messages: [{ role: "system", content: PODCAST_SYSTEM_PROMPT },
-      { role: "user", content: `Title: ${title}\nLanguage: ${language}\nTarget minutes: ${duration}\nStyle: ${style}\nSource:\n${source.slice(0, 120000)}` }],
+      { role: "user", content: `Title: ${title}\nLanguage: ${language}\nTarget minutes: ${duration}\nLength budget: ${lengthGuide}\nStyle: ${style}\nSource:\n${source.slice(0, 120000)}` }],
     temperature: 1,
     max_completion_tokens: 8192,
     reasoning_split: true
