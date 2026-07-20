@@ -13,15 +13,119 @@ concurrency:
   group: podforge-production
   cancel-in-progress: false
 
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
 jobs:
-  deploy:
-    name: Test and deploy
+  changes:
+    name: Detect changed app
+    runs-on: ubuntu-latest
+    outputs:
+      worker: ${{ steps.scope.outputs.worker }}
+      web: ${{ steps.scope.outputs.web }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect deployment scope
+        id: scope
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          worker=false
+          web=false
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+            worker=true
+            web=true
+          else
+            git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" > changed-files.txt
+            if grep -Eq '^(apps/worker/|package\.json$|package-lock\.json$|\.github/workflows/deploy\.yml$)' changed-files.txt; then
+              worker=true
+            fi
+            if grep -Eq '^(apps/web/|package\.json$|package-lock\.json$|\.github/workflows/deploy\.yml$)' changed-files.txt; then
+              web=true
+            fi
+          fi
+
+          echo "worker=$worker" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+
+  deploy-worker:
+    name: Test and deploy Worker
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' && needs.changes.outputs.web != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Worker types
+        run: npm run cf-typegen -w @podforge/worker
+
+      - name: Type-check Worker
+        run: npm run typecheck -w @podforge/worker
+
+      - name: Test Worker
+        run: npm test -w @podforge/worker
+
+      - name: Build static assets required by Worker
+        run: npm run build -w @podforge/web
+
+      - name: Validate Worker bundle
+        run: npm run build -w @podforge/worker
+
+      - name: Apply D1 migrations
+        run: npm exec -w @podforge/worker -- wrangler d1 migrations apply podforge --remote
+
+      - name: Deploy Worker
+        run: npm run deploy:worker
+
+  deploy-web:
+    name: Build and deploy web app
+    needs: changes
+    if: needs.changes.outputs.web == 'true' && needs.changes.outputs.worker != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build -w @podforge/web
+
+      - name: Deploy static assets
+        run: npm run deploy:worker
+
+  deploy-all:
+    name: Test and deploy Worker and web app
+    needs: changes
+    if: needs.changes.outputs.worker == 'true' && needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

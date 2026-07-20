@@ -31,7 +31,13 @@ npx wrangler d1 migrations apply podforge --local --config apps/worker/wrangler.
 
 ## 自动部署
 
-推送到 `main` 后，GitHub Actions 会依次执行类型检查、测试、前端构建、Worker dry run、远程 D1 migration，并统一发布 Worker 和前端静态资源。
+推送到 `main` 后，GitHub Actions 会根据变更路径选择发布范围：
+
+- 只有 `apps/worker` 变化时，执行 Worker 类型检查、测试、dry run、远程 D1 migration，并发布 Worker。
+- 只有 `apps/web` 变化时，只构建并发布前端静态资源。
+- 前后端同时变化、根依赖变化或手动触发时，执行完整检查并统一发布一次。
+
+前端使用 Worker Static Assets 托管，不依赖单独的 Cloudflare Pages 项目。Worker 发布前仍需构建当前前端，以满足静态资源绑定目录要求；后端单独变化时，Cloudflare 不会重复上传内容未变化的前端资源。
 
 在 GitHub 仓库的 Actions secrets 中配置：
 
