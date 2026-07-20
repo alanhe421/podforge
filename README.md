@@ -44,7 +44,7 @@ npx wrangler d1 migrations apply podforge --local --config apps/worker/wrangler.
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
 
-Cloudflare API Token 应限制在当前账号，并授予部署 Worker、读取绑定资源和执行 D1 migration 所需的权限。MiniMax Key 仍配置为 Worker Secret：
+Cloudflare API Token 应限制在当前账号，并授予部署 Worker、读取绑定资源和执行 D1 migration 所需的权限。MiniMax 中国站 Token Plan Subscription Key 仍以 `MINIMAX_API_KEY` 配置为 Worker Secret；API Base 使用 `https://api.minimaxi.com/v1`，文本脚本使用 OpenAI-Compatible `/chat/completions` 和 `MiniMax-M3`，语音继续使用 T2A：
 
 ```bash
 cd apps/worker

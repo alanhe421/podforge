@@ -35,11 +35,13 @@ async function minimaxFetch(env: Env, path: string, init: RequestInit): Promise<
 }
 
 export async function generateScript(env: Env, source: string, title: string, language: string, duration: number, style: string): Promise<PodcastScript> {
-  const response = await minimaxFetch(env, "/text/chatcompletion_v2", { method: "POST", body: JSON.stringify({
+  const response = await minimaxFetch(env, "/chat/completions", { method: "POST", body: JSON.stringify({
     model: env.MINIMAX_TEXT_MODEL,
     messages: [{ role: "system", content: "You create factual two-person podcast scripts. Return JSON only: {title,lines:[{speaker:'host'|'guest',text,tone}]}. Never invent facts absent from the source." },
       { role: "user", content: `Title: ${title}\nLanguage: ${language}\nTarget minutes: ${duration}\nStyle: ${style}\nSource:\n${source.slice(0, 120000)}` }],
-    temperature: 0.5
+    temperature: 1,
+    max_completion_tokens: 8192,
+    reasoning_split: true
   }) });
   const data = await response.json<MiniMaxChatResponse>();
   assertBusinessSuccess(data, "script generation");
@@ -51,7 +53,8 @@ export async function generateScript(env: Env, source: string, title: string, la
       "response contained no choices";
     throw new Error(`MiniMax returned an empty script (${reason})`);
   }
-  const script = JSON.parse(raw) as PodcastScript;
+  const json = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const script = JSON.parse(json) as PodcastScript;
   if (!Array.isArray(script.lines) || script.lines.length === 0) throw new Error("MiniMax returned an invalid script");
   return script;
 }
