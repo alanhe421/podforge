@@ -33,6 +33,7 @@ describe("MiniMax script generation", () => {
     const request = JSON.parse(String(init?.body)) as { messages: Array<{ content: string }> };
     expect(request.messages[0].content).toContain("不是把摘要轮流分配给两个人朗读");
     expect(request.messages[0].content).toContain("至少安排两次真实的澄清");
+    expect(request.messages[1].content).toContain("约 2560 个中文字符");
   });
 
   it("surfaces provider business errors returned with HTTP 200", async () => {
