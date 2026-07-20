@@ -9,7 +9,7 @@
     "dev:web": "npm run dev -w @podforge/web",
     "dev:worker": "npm run dev -w @podforge/worker",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run cf-typegen -w @podforge/worker && npm run typecheck --workspaces --if-present",
     "test": "npm test --workspaces --if-present",
     "deploy:web": "npm run deploy -w @podforge/web",
     "deploy:worker": "npm run deploy -w @podforge/worker"
