@@ -66,6 +66,23 @@ npm run deploy:worker
 
 生产构建不要设置 `VITE_API_BASE_URL`，前端会直接请求同域的 `/api/*`。
 
+## Google 登录配置
+
+在 Google Cloud Console 创建 Web OAuth 客户端，并配置以下授权回调地址：
+
+- 生产：`https://podforge.1991421.cn/api/auth/google/callback`
+- 本地：`http://localhost:5173/api/auth/google/callback`
+
+客户端 ID 和客户端密钥均通过 Worker Secret 注入，不写入源码或 Wrangler 配置：
+
+```bash
+cd apps/worker
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+```
+
+本地开发时在 `apps/worker/.dev.vars` 中设置同名变量，并先应用 `0002_auth.sql` migration。登录会话有效期为 30 天；服务端仅保存随机 Session Token 的 SHA-256 哈希。所有任务与音频 API 均要求登录，并校验任务所有者。
+
 ## 验证
 
 ```bash

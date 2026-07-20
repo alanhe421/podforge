@@ -1,6 +1,7 @@
 import { errorResponse, json, assertSameOrigin, withCors } from "./http";
 import { consume } from "./jobs";
 import type { Env, JobMessage, JobRow } from "./types";
+import { authStatus, beginGoogleLogin, finishGoogleLogin, logout, requireUser } from "./auth";
 
 const allowed = new Set([
   "application/pdf",
@@ -13,6 +14,8 @@ const cleanName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(
 
 async function createJob(request: Request, env: Env): Promise<Response> {
   if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
+  const user = await requireUser(request, env);
+  if (user instanceof Response) return user;
   const form = await request.formData();
   const files = form.getAll("files").filter((value): value is File => value instanceof File);
   const title = String(form.get("title") ?? "").trim().slice(0, 120);
@@ -31,14 +34,15 @@ async function createJob(request: Request, env: Env): Promise<Response> {
     keys.push(key);
   }
   const now = new Date().toISOString();
-  await env.DB.prepare("INSERT INTO jobs (id,title,language,duration,style,status,progress,stage,input_keys,created_at,updated_at) VALUES (?,?,?,?,?,'queued',5,'等待处理',?,?,?)")
-    .bind(id, title, language, duration, style, JSON.stringify(keys), now, now).run();
+  await env.DB.prepare("INSERT INTO jobs (id,title,language,duration,style,status,progress,stage,input_keys,created_at,updated_at,user_id) VALUES (?,?,?,?,?,'queued',5,'等待处理',?,?,?,?)")
+    .bind(id, title, language, duration, style, JSON.stringify(keys), now, now, user.id).run();
   await env.JOBS.send({ jobId: id });
   return json({ id, status: "queued" }, 202);
 }
 
-async function getJob(id: string, env: Env): Promise<Response> {
-  const row = await env.DB.prepare("SELECT * FROM jobs WHERE id=?").bind(id).first<JobRow>();
+async function getJob(id: string, request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env); if (user instanceof Response) return user;
+  const row = await env.DB.prepare("SELECT * FROM jobs WHERE id=? AND user_id=?").bind(id, user.id).first<JobRow>();
   if (!row) return errorResponse("任务不存在", 404);
   return json({ id: row.id, title: row.title, status: row.status, progress: row.progress, stage: row.stage, error: row.error,
     script: row.script ? JSON.parse(row.script) : null, audioUrl: row.audio_key ? `/api/jobs/${id}/audio` : null, createdAt: row.created_at });
@@ -46,7 +50,8 @@ async function getJob(id: string, env: Env): Promise<Response> {
 
 async function retryJob(id: string, request: Request, env: Env): Promise<Response> {
   if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
-  const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
+  const user = await requireUser(request, env); if (user instanceof Response) return user;
+  const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=? AND user_id=?").bind(id, user.id).first<{ status: string }>();
   if (!row) return errorResponse("任务不存在", 404);
   if (row.status !== "failed") return errorResponse("只有失败的任务可以重试", 409);
   await env.DB.prepare("UPDATE jobs SET status='queued', progress=5, stage='等待重试', error=NULL, updated_at=? WHERE id=?").bind(new Date().toISOString(), id).run();
@@ -56,7 +61,8 @@ async function retryJob(id: string, request: Request, env: Env): Promise<Respons
 
 export async function cancelJob(id: string, request: Request, env: Env): Promise<Response> {
   if (!assertSameOrigin(request, env.WEB_ORIGIN)) return errorResponse("Invalid request origin", 403);
-  const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=?").bind(id).first<{ status: string }>();
+  const user = await requireUser(request, env); if (user instanceof Response) return user;
+  const row = await env.DB.prepare("SELECT status FROM jobs WHERE id=? AND user_id=?").bind(id, user.id).first<{ status: string }>();
   if (!row) return errorResponse("任务不存在", 404);
   if (row.status === "canceled") return json({ id, status: "canceled" });
   if (row.status !== "queued" && row.status !== "processing") return errorResponse("当前任务无法取消", 409);
@@ -71,7 +77,8 @@ export async function cancelJob(id: string, request: Request, env: Env): Promise
 }
 
 async function audio(id: string, request: Request, env: Env): Promise<Response> {
-  const row = await env.DB.prepare("SELECT audio_key FROM jobs WHERE id=? AND status='completed'").bind(id).first<{ audio_key: string }>();
+  const user = await requireUser(request, env); if (user instanceof Response) return user;
+  const row = await env.DB.prepare("SELECT audio_key FROM jobs WHERE id=? AND user_id=? AND status='completed'").bind(id, user.id).first<{ audio_key: string }>();
   if (!row?.audio_key) return errorResponse("音频尚未生成", 404);
   const object = await env.FILES.get(row.audio_key, { range: request.headers });
   if (!object) return errorResponse("音频不存在", 404);
@@ -86,15 +93,19 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     try {
-      if (request.method === "OPTIONS" && request.headers.get("origin") === env.WEB_ORIGIN) return new Response(null, { status: 204, headers: { "access-control-allow-origin": env.WEB_ORIGIN, "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
+      if (request.method === "OPTIONS" && request.headers.get("origin") === env.WEB_ORIGIN) return new Response(null, { status: 204, headers: { "access-control-allow-origin": env.WEB_ORIGIN, "access-control-allow-credentials": "true", "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" } });
       let response: Response;
       const retryMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)\/retry$/);
       const cancelMatch = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)\/cancel$/);
       const match = url.pathname.match(/^\/api\/jobs\/([0-9a-f-]+)(\/audio)?$/);
-      if (request.method === "POST" && url.pathname === "/api/jobs") response = await createJob(request, env);
+      if (request.method === "GET" && url.pathname === "/api/auth/google") response = await beginGoogleLogin(request, env);
+      else if (request.method === "GET" && url.pathname === "/api/auth/google/callback") response = await finishGoogleLogin(request, env);
+      else if (request.method === "GET" && url.pathname === "/api/auth/me") response = await authStatus(request, env);
+      else if (request.method === "POST" && url.pathname === "/api/auth/logout") response = await logout(request, env);
+      else if (request.method === "POST" && url.pathname === "/api/jobs") response = await createJob(request, env);
       else if (retryMatch && request.method === "POST") response = await retryJob(retryMatch[1], request, env);
       else if (cancelMatch && request.method === "POST") response = await cancelJob(cancelMatch[1], request, env);
-      else if (match && request.method === "GET") response = match[2] ? await audio(match[1], request, env) : await getJob(match[1], env);
+      else if (match && request.method === "GET") response = match[2] ? await audio(match[1], request, env) : await getJob(match[1], request, env);
       else response = errorResponse("Not found", 404);
       return withCors(response, request, env.WEB_ORIGIN);
     } catch (cause) {
