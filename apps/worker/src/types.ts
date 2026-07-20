@@ -18,5 +18,6 @@ export interface JobRow {
   script: string | null; audio_key: string | null; input_keys: string;
   created_at: string; updated_at: string;
 }
-export interface DialogueLine { speaker: "host" | "guest"; text: string; tone?: string }
+export type PodcastTone = "calm" | "happy" | "surprised" | "sad" | "angry" | "fearful";
+export interface DialogueLine { speaker: "host" | "guest"; text: string; tone?: PodcastTone }
 export interface PodcastScript { title: string; lines: DialogueLine[] }

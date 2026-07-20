@@ -1,6 +1,7 @@
 import { extractText } from "unpdf";
 import mammoth from "mammoth";
 import { Buffer } from "node:buffer";
+import { fadePcmEdges, pauseAfter, storePodcastWav, type StoredAudioPart } from "./audio";
 import { generateScript, synthesizeLine } from "./minimax";
 import type { Env, JobMessage, JobRow } from "./types";
 
@@ -28,6 +29,7 @@ export async function sourceText(env: Env, keys: string[]): Promise<string> {
 export async function processJob(env: Env, jobId: string): Promise<void> {
   const job = await env.DB.prepare("SELECT * FROM jobs WHERE id=?").bind(jobId).first<JobRow>();
   if (!job || job.status === "completed") return;
+  const temporaryAudioKeys: string[] = [];
   try {
     await update(env, jobId, "processing", 15, "正在解析资料");
     const source = await sourceText(env, JSON.parse(job.input_keys) as string[]);
@@ -35,23 +37,27 @@ export async function processJob(env: Env, jobId: string): Promise<void> {
     await update(env, jobId, "processing", 35, "正在生成双人脚本");
     const script = await generateScript(env, source, job.title, job.language, job.duration, job.style);
     await env.DB.prepare("UPDATE jobs SET script=?, updated_at=? WHERE id=?").bind(JSON.stringify(script), new Date().toISOString(), jobId).run();
-    const parts: Uint8Array[] = [];
+    const parts: StoredAudioPart[] = [];
     for (let index = 0; index < script.lines.length; index += 1) {
       const line = script.lines[index];
-      parts.push(await synthesizeLine(env, line.text, line.speaker));
+      const pcm = fadePcmEdges(await synthesizeLine(env, line.text, line.speaker, line.tone));
+      const partKey = `jobs/${jobId}/audio-parts/${index.toString().padStart(4, "0")}.pcm`;
+      await env.FILES.put(partKey, pcm);
+      temporaryAudioKeys.push(partKey);
+      parts.push({ key: partKey, byteLength: pcm.byteLength, pauseMs: pauseAfter(line, script.lines[index + 1]) });
       await update(env, jobId, "processing", 45 + Math.floor(((index + 1) / script.lines.length) * 45), `正在合成语音 ${index + 1}/${script.lines.length}`);
     }
-    const audioKey = `jobs/${jobId}/podcast.mp3`;
-    const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
-    const audio = new Uint8Array(total);
-    let offset = 0;
-    for (const part of parts) { audio.set(part, offset); offset += part.byteLength; }
-    await env.FILES.put(audioKey, audio.buffer, { httpMetadata: { contentType: "audio/mpeg", contentDisposition: `attachment; filename="podcast-${jobId}.mp3"` } });
+    await update(env, jobId, "processing", 92, "正在编排对话节奏");
+    const audioKey = `jobs/${jobId}/podcast-${jobId}.wav`;
+    await storePodcastWav(env.FILES, audioKey, parts);
     await env.DB.prepare("UPDATE jobs SET status='completed', progress=100, stage='生成完成', audio_key=?, updated_at=? WHERE id=?").bind(audioKey, new Date().toISOString(), jobId).run();
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "生成失败";
     await update(env, jobId, "failed", 0, "生成失败", message.slice(0, 500));
     throw cause;
+  } finally {
+    if (temporaryAudioKeys.length > 0) await env.FILES.delete(temporaryAudioKeys).catch(cause =>
+      console.warn(JSON.stringify({ event: "audio_parts_cleanup_failed", jobId, error: cause instanceof Error ? cause.message : "unknown" })));
   }
 }
 
