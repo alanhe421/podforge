@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 type Props={onCreate:(data:FormData)=>Promise<void>};
 export function JobForm({onCreate}:Props){const [files,setFiles]=useState<File[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(false),input=useRef<HTMLInputElement>(null);async function submit(event:React.FormEvent<HTMLFormElement>){event.preventDefault();setError("");setBusy(true);try{const data=new FormData(event.currentTarget);files.forEach(file=>data.append("files",file));await onCreate(data)}catch(cause){setError(cause instanceof Error?cause.message:"创建任务失败")}finally{setBusy(false)}}return <form className="card" onSubmit={submit}>
   <Step number="01" title="选择资料" copy="单个文件最大 10 MB，可同时上传多个"/>
-  <label className="dropzone"><input ref={input} type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" onChange={e=>setFiles([...e.target.files??[]])}/><span className="upload-icon">↑</span><strong>拖放文件到这里</strong><small>或点击浏览本地文件</small></label>
+  <label className="dropzone"><input ref={input} type="file" multiple accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" onChange={e=>setFiles([...e.target.files??[]])}/><span className="upload-icon">↑</span><strong>拖放文件到这里</strong><small>或点击浏览本地文件</small></label>
   <ul className="file-list" aria-live="polite">{files.map(file=><li key={`${file.name}-${file.size}`}>{file.name}<span>{(file.size/1048576).toFixed(1)} MB</span></li>)}</ul>
   <Step number="02" title="定制节目" copy="为这期节目设置声音方向"/>
   <label>播客标题<input name="title" maxLength={120} placeholder="例如：重新理解人工智能" required/></label>

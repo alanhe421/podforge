@@ -2,7 +2,13 @@ import { errorResponse, json, assertSameOrigin, withCors } from "./http";
 import { consume } from "./jobs";
 import type { Env, JobMessage, JobRow } from "./types";
 
-const allowed = new Set(["application/pdf", "text/plain", "text/markdown", "text/x-markdown"]);
+const allowed = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown"
+]);
 const cleanName = (name: string) => name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-100);
 
 async function createJob(request: Request, env: Env): Promise<Response> {
@@ -16,7 +22,7 @@ async function createJob(request: Request, env: Env): Promise<Response> {
   if (!title || files.length === 0) return errorResponse("请填写标题并至少上传一个资料文件");
   if (!Number.isInteger(duration) || duration < 3 || duration > 30) return errorResponse("目标时长须为 3–30 分钟");
   const max = Number(env.MAX_UPLOAD_BYTES);
-  if (files.some(file => file.size <= 0 || file.size > max || !allowed.has(file.type))) return errorResponse("仅支持 10 MB 内的 PDF、TXT 或 Markdown 文件");
+  if (files.some(file => file.size <= 0 || file.size > max || !allowed.has(file.type))) return errorResponse("仅支持 10 MB 内的 PDF、DOCX、TXT 或 Markdown 文件");
   const id = crypto.randomUUID();
   const keys: string[] = [];
   for (const file of files) {
