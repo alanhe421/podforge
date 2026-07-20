@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-19",
   "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    { "pattern": "podforge.1991421.cn", "custom_domain": true }
+  ],
   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
